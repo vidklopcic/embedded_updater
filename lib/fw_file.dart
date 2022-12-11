@@ -64,7 +64,7 @@ class EmbeddedUpdaterFwFileImpl extends EmbeddedUpdaterFwFile {
 
   @override
   Future<Uint8List> read(int d) async {
-    currentOffset += d;
+    currentOffset = (currentOffset + d).clamp(0, size);
     return await _file.read(d);
   }
 
