@@ -66,7 +66,8 @@ class EmbeddedUpdater<T> {
             await fw.nextBlock();
           }
           state = EmbeddedUpdaterState.waitingForBlock;
-        } else if (event.text == 'WRITE ERROR') {
+        } else {
+          print('write fw block error - ${event.text}');
           state = EmbeddedUpdaterState.blockError;
         }
         complete();
