@@ -12,17 +12,16 @@ class EmbeddedUpdater<T> {
   final Future<bool> Function(Future<T>) isSent;
   bool _disposed = false;
 
-  int currentBlockLen = 0;
-  int currentOffset = 0;
   int nBlockRetries = 0;
   bool doneDownloading = false;
 
   StreamController<EmbeddedUpdaterProgressUpdate> _progressUpdates = StreamController.broadcast();
 
   EmbeddedUpdaterState state = EmbeddedUpdaterState.rebootingBootloader;
-  double downloadProgress = 0;
 
-  late List<StreamSubscription> _subscriptions = [];
+  double get downloadProgress => doneDownloading ? 1.0 : fw.progress;
+
+  final List<StreamSubscription> _subscriptions = [];
 
   Completer<bool> _actionCompleter = Completer();
 
@@ -33,7 +32,7 @@ class EmbeddedUpdater<T> {
   EmbeddedUpdater(
     this.commands,
     this.fw, {
-    this.rebootTimeout = const Duration(minutes: 1),
+    this.rebootTimeout = const Duration(seconds: 30),
     this.timeout = const Duration(seconds: 10),
     Future<bool> Function(Future<T>)? isSent,
   }) : isSent = isSent ?? _defaultIsSent {
@@ -86,6 +85,16 @@ class EmbeddedUpdater<T> {
   }
 
   Future<EmbeddedUpdaterError?> update() async {
+    final result = await _update();
+    if (result != null && state != EmbeddedUpdaterState.updateFailed) {
+      state = EmbeddedUpdaterState.updateFailed;
+      _progressUpdates.add(EmbeddedUpdaterProgressUpdate(state, downloadProgress));
+      await Future.delayed(const Duration(milliseconds: 1));
+    }
+    return result;
+  }
+
+  Future<EmbeddedUpdaterError?> _update() async {
     while (!_disposed) {
       _progressUpdates.add(EmbeddedUpdaterProgressUpdate(state, downloadProgress));
       switch (state) {
@@ -99,8 +108,12 @@ class EmbeddedUpdater<T> {
           }
           break;
         case EmbeddedUpdaterState.initiatingUpdate:
+          _actionCompleter = Completer();
           if (!await isSent(commands.send(EmbeddedUpdaterCommands.initiateUpdate))) {
             return commError;
+          }
+          if (!await _actionCompleter.future.timeout(rebootTimeout, onTimeout: () => false)) {
+            return EmbeddedUpdaterError(state, 'Failed to reboot into bootloader.');
           }
           break;
         case EmbeddedUpdaterState.waitingForBlock:
@@ -137,12 +150,15 @@ class EmbeddedUpdater<T> {
           }
           break;
         case EmbeddedUpdaterState.updateSuccessful:
+          await Future.delayed(const Duration(milliseconds: 1)); // deliver remaining stream events
           return null;
         case EmbeddedUpdaterState.updateFailed:
           return EmbeddedUpdaterError(state, 'Unknown error.');
       }
     }
+    return null;
   }
+
 
   static Future<bool> _defaultIsSent(Future command) async {
     return await command == true;

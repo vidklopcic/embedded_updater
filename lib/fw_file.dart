@@ -4,11 +4,13 @@ import 'dart:typed_data';
 abstract class EmbeddedUpdaterFwFile {
   int blockN = 0;
 
+  double get progress;
+
   late EmbeddedUpdaterFwBlockHeader header;
 
   late Uint8List block;
 
-  bool verifyHash();
+  Future<bool> verifyHash();
 
   Future nextBlock();
 
@@ -18,7 +20,10 @@ abstract class EmbeddedUpdaterFwFile {
 
   static Future<EmbeddedUpdaterFwFile> fromPath(String path) async {
     final file = await File(path).open();
-    return EmbeddedUpdaterFwFileImpl._(file, await file.length());
+    final fw = EmbeddedUpdaterFwFileImpl._(file, await file.length());
+    await fw.verifyHash();
+    await fw.nextBlock();
+    return fw;
   }
 }
 
@@ -40,22 +45,21 @@ class EmbeddedUpdaterFwFileImpl extends EmbeddedUpdaterFwFile {
   int size;
   int currentOffset = 0;
 
-  EmbeddedUpdaterFwFileImpl._(this._file, this.size) {
-    nextBlock();
-  }
+  EmbeddedUpdaterFwFileImpl._(this._file, this.size);
 
   @override
   Future nextBlock() async {
     if (done) return;
     blockN++;
     var blockBuilder = BytesBuilder();
+    blockBuilder.add(await read(kSignatureLen));
     final headerBytes = await read(kHeaderLen);
     blockBuilder.add(headerBytes);
     final headerData = ByteData.view(headerBytes.buffer);
     header = EmbeddedUpdaterFwBlockHeader(
       headerData.getUint32(0, Endian.little),
       headerData.getUint32(4, Endian.little),
-      headerData.getUint32(8, Endian.little),
+      headerData.getUint16(8, Endian.little),
       headerData.getUint16(10, Endian.little),
     );
     blockBuilder.add(await read(header.size));
@@ -69,11 +73,13 @@ class EmbeddedUpdaterFwFileImpl extends EmbeddedUpdaterFwFile {
   }
 
   @override
-  bool verifyHash() {
-    // TODO: implement verifyHash
-    throw UnimplementedError();
+  Future<bool> verifyHash() async {
+    return true;
   }
 
   @override
-  bool get done => currentOffset == size;
+  bool get done => currentOffset + kEccBytes == size;
+
+  @override
+  double get progress => currentOffset / size;
 }
