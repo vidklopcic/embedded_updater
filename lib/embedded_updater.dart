@@ -4,6 +4,8 @@ import 'package:embedded_commands/embedded_commands.dart';
 import 'package:embedded_updater/commands.dart';
 import 'package:embedded_updater/fw_file.dart';
 
+import 'data/bootloader_state_data.dart';
+
 class EmbeddedUpdater<T> {
   final Duration rebootTimeout;
   final Duration timeout;
@@ -31,6 +33,8 @@ class EmbeddedUpdater<T> {
 
   Stream<EmbeddedUpdaterProgressUpdate> get progessUpdates => _progressUpdates.stream;
 
+  BootloaderStatusData? bootloaderStatus;
+
   EmbeddedUpdater(
     this.commands,
     this.fw, {
@@ -46,7 +50,8 @@ class EmbeddedUpdater<T> {
 
     _subscriptions.add(
       commands.getHandler(EmbeddedUpdaterCommands.bootloaderState).listen((event) {
-        EmbeddedUpdaterState newState = EmbeddedUpdaterState.values[event.payload[0]];
+        bootloaderStatus = BootloaderStatusData(event.payloadBytes);
+        EmbeddedUpdaterState newState = bootloaderStatus!.state;
         if (state == newState) {
           return;
         }
@@ -58,7 +63,7 @@ class EmbeddedUpdater<T> {
           complete();
         } else if (state == EmbeddedUpdaterState.rebootingBootloader) {
           print('wrong device state ($state) - rebooting bootloader');
-          commands.send(EmbeddedUpdaterCommands.rebootBootloader);
+          commands.send(EmbeddedUpdaterCommands.rebootIntoBootloader);
         } else {
           _error = EmbeddedUpdaterError(state, 'Unexpected bootloader state: $newState');
           dispose();
@@ -88,7 +93,6 @@ class EmbeddedUpdater<T> {
         if (event.text == 'UPDATE SUCCESSFUL') {
           state = EmbeddedUpdaterState.updateSuccessful;
         } else {
-          print('1 - update failed');
           state = EmbeddedUpdaterState.updateFailed;
         }
         complete();
@@ -103,7 +107,6 @@ class EmbeddedUpdater<T> {
 
     final result = await _update();
     if (result != null && state != EmbeddedUpdaterState.updateFailed) {
-      print('2 - update failed $result');
       state = EmbeddedUpdaterState.updateFailed;
       _progressUpdates.add(EmbeddedUpdaterProgressUpdate(state, downloadProgress));
       await Future.delayed(const Duration(milliseconds: 1));
@@ -130,7 +133,7 @@ class EmbeddedUpdater<T> {
             return commError;
           }
           if (!await _actionCompleter.future.timeout(rebootTimeout, onTimeout: () => false)) {
-            return EmbeddedUpdaterError(state, 'Failed to reboot into bootloader.');
+            return EmbeddedUpdaterError(state, 'Failed to initiate update.');
           }
           break;
         case EmbeddedUpdaterState.waitingForBlock:
@@ -174,14 +177,6 @@ class EmbeddedUpdater<T> {
       sub.cancel();
     }
   }
-}
-
-enum EmbeddedUpdaterState {
-  rebootingBootloader,
-  initiatingUpdate,
-  waitingForBlock,
-  updateSuccessful,
-  updateFailed,
 }
 
 class EmbeddedUpdaterError {
