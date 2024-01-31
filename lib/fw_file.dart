@@ -39,7 +39,7 @@ class EmbeddedUpdaterFwBlockHeader {
 class EmbeddedUpdaterFwFileImpl extends EmbeddedUpdaterFwFile {
   static const int kEccBytes = 32;
   static const int kSignatureLen = kEccBytes * 2;
-  static const int kHeaderLen = 12;
+  static const int kHeaderLen = 16;
 
   final RandomAccessFile _file;
   int size;

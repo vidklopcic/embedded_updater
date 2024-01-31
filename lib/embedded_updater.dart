@@ -14,6 +14,7 @@ class EmbeddedUpdater<T> {
   final Future<bool> Function(Future<T>) isSent;
   bool _disposed = false;
 
+  String? _errorMessage;
   int nBlockRetries = 0;
   bool doneDownloading = false;
 
@@ -82,6 +83,7 @@ class EmbeddedUpdater<T> {
           nBlockRetries = 0;
         } else {
           nBlockRetries++;
+          _errorMessage = '[${event.text}]';
           print('write fw block error - ${event.text}');
         }
         complete();
@@ -104,6 +106,7 @@ class EmbeddedUpdater<T> {
     if (state != EmbeddedUpdaterState.rebootingBootloader) {
       return EmbeddedUpdaterError(state, 'Update already initiated!');
     }
+    _errorMessage = null;
 
     final result = await _update();
     if (result != null && state != EmbeddedUpdaterState.updateFailed) {
@@ -124,7 +127,7 @@ class EmbeddedUpdater<T> {
             return commError;
           }
           if (!await _actionCompleter.future.timeout(rebootTimeout, onTimeout: () => false)) {
-            return EmbeddedUpdaterError(state, 'Failed to reboot into bootloader.');
+            return EmbeddedUpdaterError(state, 'Failed to reboot into bootloader. ${_errorMessage ?? ""}');
           }
           break;
         case EmbeddedUpdaterState.initiatingUpdate:
@@ -133,7 +136,7 @@ class EmbeddedUpdater<T> {
             return commError;
           }
           if (!await _actionCompleter.future.timeout(rebootTimeout, onTimeout: () => false)) {
-            return EmbeddedUpdaterError(state, 'Failed to initiate update.');
+            return EmbeddedUpdaterError(state, 'Failed to initiate update. ${_errorMessage ?? ""}');
           }
           break;
         case EmbeddedUpdaterState.waitingForBlock:
@@ -143,7 +146,7 @@ class EmbeddedUpdater<T> {
               return commError;
             }
           } else if (nBlockRetries > 3) {
-            return EmbeddedUpdaterError(state, 'Failed to write block (${fw.blockN}) with $nBlockRetries retries.');
+            return EmbeddedUpdaterError(state, 'Failed to write block (${fw.blockN}) with $nBlockRetries retries. ${_errorMessage ?? ""}');
           } else {
             EmbeddedUpdaterCommands.writeFwBlock.setExtendedPayload(fw.block);
             if (!await isSent(commands.send(EmbeddedUpdaterCommands.writeFwBlock))) {
@@ -152,7 +155,7 @@ class EmbeddedUpdater<T> {
             if (!await _actionCompleter.future.timeout(timeout, onTimeout: () => false)) {
               return EmbeddedUpdaterError(
                 state,
-                'Failed to initiate block write (${fw.blockN}), already retried $nBlockRetries times.',
+                'Failed to initiate block write (${fw.blockN}), already retried $nBlockRetries times. ${_errorMessage ?? ""}',
               );
             }
           }
@@ -161,7 +164,7 @@ class EmbeddedUpdater<T> {
           await Future.delayed(const Duration(milliseconds: 1)); // deliver remaining stream events
           return null;
         case EmbeddedUpdaterState.updateFailed:
-          return EmbeddedUpdaterError(state, 'Unknown error.');
+          return EmbeddedUpdaterError(state, 'Unknown error. ${_errorMessage ?? ""}');
       }
     }
     return _error;
