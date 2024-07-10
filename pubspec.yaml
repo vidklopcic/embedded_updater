@@ -12,7 +12,9 @@ dependencies:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
   embedded_commands:
-    git: https://github.com/vidklopcic/embedded_commands.git
+    git:
+      url: https://github.com/vidklopcic/embedded_commands.git
+      ref: 1.0.0
 
 dev_dependencies:
   flutter_test:
