@@ -155,7 +155,7 @@ class EmbeddedUpdater<T> {
             if (!await isSent(commands.send(EmbeddedUpdaterCommands.writeFwBlock))) {
               return commError;
             }
-            if (!await _actionCompleter.future.timeout(fw.blockN == 0 ? eraseFlashTimeout : timeout, onTimeout: () => false)) {
+            if (!await _actionCompleter.future.timeout(fw.blockN == 1 ? eraseFlashTimeout : timeout, onTimeout: () => false)) {
               nBlockRetries++;
               _errorMessage = '[timeout]';
               print('write fw block timeout - retrying (${nBlockRetries})');
