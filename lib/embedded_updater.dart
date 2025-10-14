@@ -9,6 +9,7 @@ import 'data/bootloader_state_data.dart';
 class EmbeddedUpdater<T> {
   final Duration rebootTimeout;
   final Duration timeout;
+  final Duration eraseFlashTimeout;
   final EmbeddedCommands<T> commands;
   final EmbeddedUpdaterFwFile fw;
   final Future<bool> Function(Future<T>) isSent;
@@ -41,6 +42,7 @@ class EmbeddedUpdater<T> {
     this.fw, {
     this.rebootTimeout = const Duration(seconds: 30),
     this.timeout = const Duration(seconds: 10),
+    this.eraseFlashTimeout = const Duration(seconds: 30),
     Future<bool> Function(Future<T>)? isSent,
   }) : isSent = isSent ?? _defaultIsSent {
     void complete() {
@@ -153,7 +155,7 @@ class EmbeddedUpdater<T> {
             if (!await isSent(commands.send(EmbeddedUpdaterCommands.writeFwBlock))) {
               return commError;
             }
-            if (!await _actionCompleter.future.timeout(timeout, onTimeout: () => false)) {
+            if (!await _actionCompleter.future.timeout(fw.blockN == 0 ? eraseFlashTimeout : timeout, onTimeout: () => false)) {
               nBlockRetries++;
               _errorMessage = '[timeout]';
               print('write fw block timeout - retrying (${nBlockRetries})');
