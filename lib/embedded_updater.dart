@@ -146,17 +146,18 @@ class EmbeddedUpdater<T> {
               return commError;
             }
           } else if (nBlockRetries > 3) {
-            return EmbeddedUpdaterError(state, 'Failed to write block (${fw.blockN}) with $nBlockRetries retries. ${_errorMessage ?? ""}');
+            return EmbeddedUpdaterError(
+                state, 'Failed to write block (${fw.blockN}) with $nBlockRetries retries. ${_errorMessage ?? ""}');
           } else {
             EmbeddedUpdaterCommands.writeFwBlock.setExtendedPayload(fw.block);
             if (!await isSent(commands.send(EmbeddedUpdaterCommands.writeFwBlock))) {
               return commError;
             }
             if (!await _actionCompleter.future.timeout(timeout, onTimeout: () => false)) {
-              return EmbeddedUpdaterError(
-                state,
-                'Failed to initiate block write (${fw.blockN}), already retried $nBlockRetries times. ${_errorMessage ?? ""}',
-              );
+              nBlockRetries++;
+              _errorMessage = '[timeout]';
+              print('write fw block timeout - retrying (${nBlockRetries})');
+              continue;
             }
           }
           break;
